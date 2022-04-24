@@ -2,9 +2,7 @@
 # encoding: utf-8
 # Run in base conda env
 # Requirements Flask, pillow, python-opencv, numpy, torch, pytorch_lightning, torchvision
-import json
 import os
-
 import numpy as np
 import cv2
 import base64
