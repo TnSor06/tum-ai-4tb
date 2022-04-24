@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 SEG_LABELS_LIST = [
     {"id": 1, "name": "void", "rgb_values": [0,   0,    0]},

@@ -19,6 +19,7 @@ loader = transforms.Compose([transforms.ToTensor()])
 
 import utils
 from utils import label_img_to_rgb
+import matplotlib.pyplot as plt
 
 from segmentation_nn import SegmentationNN
 model = SegmentationNN()
@@ -66,8 +67,17 @@ def fileUpload():
     return response
 
 
+
+def retrieve_image(data, shape):
+    nparr = np.fromstring(base64.b64decode(data), np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    img_pil = Image.fromarray(img)
+    image = np.array(img_pil.resize(shape))
+    return image
+
+
 @app.route('/postprocess', methods=['POST'])
-def fileUpload():
+def postprocess():
     """
     JSON:
     image: imput-image from camera
@@ -75,17 +85,14 @@ def fileUpload():
     """
     logger.info("newUpload")
     data = request.get_json()["image"]
-    target = request.get_json()["target"]
-    encoded_data = data.split(',')[1]
-    nparr = np.fromstring(base64.b64decode(encoded_data), np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # Resize to correct shape
-    img_pil = Image.fromarray(img_gray)
-    image = np.array(img_pil.resize((300,300)))
-    mask = np.zeros_like(image)
+    target_data = request.get_json()["target"]
+    # encoded_data = data.split(',')[1]
+    image = retrieve_image(data, (300,300))
+    target = retrieve_image(target_data, (300, 300))
+    imgray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    mask = np.zeros_like(imgray)
     # masked image
-    masked_image = np.bitwise_and(image, image, where=target[:,:,1]<1.0)
+    masked_image = np.bitwise_and(imgray, imgray, where=target[:,:,1] > 250)
     # threshold image to get white portions
     ret, thresh = cv2.threshold(masked_image,200.0,225.0,cv2.THRESH_BINARY)
 
@@ -99,8 +106,8 @@ def fileUpload():
         rect = cv2.minAreaRect(contours[max_rect_id])
         extracted_test = utils.crop_rect(image, rect)
 
-        num = random.randint(1, 1000)
-        cv2.imwrite(f"./image/output-{num}.jpg", extracted_test)
-    return "Yay!"
+        # save extracted test
+        cv2.imwrite(f"./image/output.jpg", extracted_test)
+    return "yay"
 
 app.run(use_reloader=True, port=5000, threaded=True)
