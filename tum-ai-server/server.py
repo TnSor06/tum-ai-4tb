@@ -17,6 +17,7 @@ import torch
 from torchvision import transforms
 loader = transforms.Compose([transforms.ToTensor()])
 
+import utils
 from utils import label_img_to_rgb
 
 from segmentation_nn import SegmentationNN
@@ -61,7 +62,45 @@ def fileUpload():
     cv2.imwrite(f"./image/output-{num}.jpg", label_img_to_rgb(pred))
     cv2.imshow("Prediction", label_img_to_rgb(pred))
     cv2.waitKey(0)
-    response="Whatever you wish too return"
+    response="Whatever you wish to return"
     return response
+
+
+@app.route('/postprocess', methods=['POST'])
+def fileUpload():
+    """
+    JSON:
+    image: imput-image from camera
+    target: output from segmentation-network
+    """
+    logger.info("newUpload")
+    data = request.get_json()["image"]
+    target = request.get_json()["target"]
+    encoded_data = data.split(',')[1]
+    nparr = np.fromstring(base64.b64decode(encoded_data), np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Resize to correct shape
+    img_pil = Image.fromarray(img_gray)
+    image = np.array(img_pil.resize((300,300)))
+    mask = np.zeros_like(image)
+    # masked image
+    masked_image = np.bitwise_and(image, image, where=target[:,:,1]<1.0)
+    # threshold image to get white portions
+    ret, thresh = cv2.threshold(masked_image,200.0,225.0,cv2.THRESH_BINARY)
+
+    # draw contours
+    contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+
+    # get maximum rectangle
+    max_rect_id = utils.detect_max_rect(masked_image, contours)
+
+    if contours and contours[0].size > 4:
+        rect = cv2.minAreaRect(contours[max_rect_id])
+        extracted_test = utils.crop_rect(image, rect)
+
+        num = random.randint(1, 1000)
+        cv2.imwrite(f"./image/output-{num}.jpg", extracted_test)
+    return "Yay!"
 
 app.run(use_reloader=True, port=5000, threaded=True)
