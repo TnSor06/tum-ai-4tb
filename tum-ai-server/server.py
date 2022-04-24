@@ -22,16 +22,30 @@ from utils import label_img_to_rgb
 import matplotlib.pyplot as plt
 
 from segmentation_nn import SegmentationNN
+from classification_model import MyModel
+
+# load models
+
+# load segmentation model
 model = SegmentationNN()
 
 model.load('./models/model_mobilenet.pth')
 model.eval()
+
+"""
+# load classification model
+class_model = MyModel()
+class_model.load()
+class_model.eval()
+"""
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('flask-server')
 
 app = Flask(__name__, static_folder='client/build')
 CORS(app)
+
 
 # Serve React App
 @app.route('/', defaults={'path': ''})
@@ -41,6 +55,7 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, 'index.html')
+
 
 @app.route('/upload', methods=['POST'])
 def fileUpload():
@@ -67,7 +82,6 @@ def fileUpload():
     return response
 
 
-
 def retrieve_image(data, shape):
     nparr = np.fromstring(base64.b64decode(data), np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -80,7 +94,7 @@ def retrieve_image(data, shape):
 def postprocess():
     """
     JSON:
-    image: imput-image from camera
+    image: input-image from camera
     target: output from segmentation-network
     """
     logger.info("newUpload")
@@ -109,5 +123,25 @@ def postprocess():
         # save extracted test
         cv2.imwrite(f"./image/output.jpg", extracted_test)
     return "yay"
+
+
+@app.route('/classification', methods=['POST'])
+def classification():
+    """
+    JSON:
+    image: input-image of extracted covid-test
+    """
+    logger.info("classification")
+    data = request.get_json()["image"]
+    # encoded_data = data.split(',')[1]
+    image = retrieve_image(data, (300,224))
+    model_input = loader(image).float()
+    model_input = torch.tensor(model_input, requires_grad=False)
+    model_input = model_input.unsqueeze(0)
+    outputs = model.forward(model_input)
+    pred = preds[0].data.cpu().numpy()
+    print(pred, flush=True)
+    return "yay"
+
 
 app.run(use_reloader=True, port=5000, threaded=True)
